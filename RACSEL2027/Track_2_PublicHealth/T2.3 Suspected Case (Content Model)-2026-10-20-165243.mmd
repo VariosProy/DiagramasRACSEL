@@ -1,0 +1,48 @@
+%%{init: {'theme': 'base', 'themeVariables': {'noteBkgColor': '#FBE87A', 'noteBorderColor': '#D9BE2E', 'noteTextColor': '#16324A'}, 'sequence': {'noteMargin': 20, 'boxMargin': 20, 'messageMargin': 45, 'actorMargin': 220, 'width': 200}, 'themeCSS': 'rect[name=CL]{fill:#E1E9FD !important;stroke:#6C86D6 !important} rect[name=EHR]{fill:#FCE4F2 !important;stroke:#D6539B !important} rect[name=MPI]{fill:#DFF7F3 !important;stroke:#3FB6A8 !important} rect[name=TS]{fill:#FDEBD8 !important;stroke:#E2953A !important} rect[name=PH]{fill:#DDF2FB !important;stroke:#3FA9D6 !important}'}}%%
+sequenceDiagram
+autonumber
+participant CL as Clinician
+participant EHR as HIS_Country_A
+participant MPI as MPI
+participant TS as Terminology Server
+participant PH as Public Health Server
+
+rect rgb(235, 245, 255)
+Note over CL, PH: Phase 1: Patient lookup and registration
+EHR->>MPI: Query Patient<br/>PDQm ITI-78 <G>
+MPI-->>EHR: ITI-78 Response - matching Patient<br/>(200 OK match / 200 OK no match /<br/>404 Not Found)
+opt 200 OK - no match found
+EHR->>MPI: Register Patient<br/>PIXm ITI-104 <G>
+MPI-->>EHR: 201 Created - Patient created<br/>(400 / 422 OperationOutcome on error)
+EHR->>EHR: Query registered patient<br/>again (step 1)
+end
+opt 404 Not Found - identifier domain not recognised
+MPI-->>EHR: 404 Not Found (OperationOutcome)
+EHR->>EHR: Adjust identifiers and<br/>restart from step 1
+end
+end
+
+rect rgb(235, 245, 255)
+Note over CL, PH: Phase 2: Record suspected case / event
+CL->>EHR: Record suspected case<br/>(Condition, provisional, onset date)
+EHR->>EHR: Notification rule:notifiable + suspected,<br/>open generic and disease-specific forms
+end
+
+rect rgb(235, 245, 255)
+Note over CL, PH: Phase 3: Complete notification forms and standardise codes
+CL->>EHR: Complete Epi Questions <br/>(QuestionnaireResponse), generic + disease specific
+EHR->>EHR: Collect existing EHR data as FHIR resources<br/>(Patient, Encounter, Immunization, Observation)
+
+opt Optional - local codes in use
+EHR->>TS: Translate event code and answers to regional codes<br/>SVCM ITI-101 Translate Code <G>
+TS-->>EHR: ITI-101 Response - translated regional code(s)<br/>(200 OK result=true + regional code, 200 OK result=false - no mapping / 4xx OperationOutcome)
+end
+EHR->>EHR: Build notification message (Bundle.type = message)<br>(MsgHeader,Patient, COndition, Immunization,QuestionnaireResponse (genereic), QuestionnaireResponse(disease Specific))
+end
+
+rect rgb(235, 245, 255)
+Note over CL, PH: Phase 4: Notify Public Health (<G> = routed via Gazelle)
+EHR->>PH: Submit notification message Bundle <G><br/>HL7 FHIR R4 Messaging - $process-message
+PH->>PH: Register notification<br/>+ assign ID
+PH-->>EHR: Response message <G> MessageHeader.response.identifier = request message ID<br>(200 OK: ok / duplicate / transient-error / fatal-error, 400 / 422 OperationOutcome)
+end

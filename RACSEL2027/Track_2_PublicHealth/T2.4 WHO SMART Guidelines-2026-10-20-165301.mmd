@@ -1,0 +1,45 @@
+%%{init: {'theme': 'base', 'themeVariables': {'noteBkgColor': '#FBE87A', 'noteBorderColor': '#D9BE2E', 'noteTextColor': '#16324A'}, 'sequence': {'noteMargin': 20, 'boxMargin': 20, 'messageMargin': 45}, 'themeCSS': 'rect[name=CL]{fill:#FCE1DE !important;stroke:#E0776A !important} rect[name=EHR]{fill:#FCE4F2 !important;stroke:#D6539B !important} rect[name=MPI]{fill:#DFF7F3 !important;stroke:#3FB6A8 !important} rect[name=SG]{fill:#DDF2FB !important;stroke:#3FA9D6 !important} rect[name=WHO]{fill:#E4F5E1 !important;stroke:#7CC26A !important} rect[name=ITB]{fill:#E2E9FD !important;stroke:#6C86D6 !important}'}}%%
+sequenceDiagram
+autonumber
+participant CL as Clinician
+participant EHR as HIS_Country_A
+participant MPI as MPI
+participant SG as SMART Guidelines Server
+participant WHO as "WHO smart-anc (L3) Repo"
+participant ITB as ITB
+
+rect rgb(235, 245, 255)
+Note over CL, ITB: Phase 0: Configure SMART Guidelines on the node
+SG->>SG: Deploy FHIR server with CQL engine<br/>(Clinical Reasoning enabled)
+WHO->>SG: Load ANCDT01 bundle unedited<br/>(PlanDefinition, CQL Library, ValueSets)
+end
+
+rect rgb(235, 245, 255)
+Note over CL, ITB: Phase 1: Identify the patient
+EHR->>MPI: Query Patient<br/>PDQm ITI-78 <G>
+MPI-->>EHR: Return patient ITI-78 Response<br/>(200 OK match / 200 OK no match / 404)
+end
+
+rect rgb(235, 245, 255)
+Note over CL, ITB: Phase 2: ANC contact and danger-sign capture
+CL->>EHR: Start ANC contact (Encounter)
+CL->>EHR: Complete ANC Quick Check - danger signs<br/>(ANC.B5.DE48)
+EHR->>EHR: Create Observation per danger sign<br/>(code ANC.B5.DE48, value ANC.B5.DE49-DE62, encounter)
+end
+
+rect rgb(235, 245, 255)
+Note over CL, ITB: Phase 3: Invoke ANC.DT.01 Guideline and return recommendation
+EHR->>SG: Request ANC.DT.01 Decision Support<br/>Patient Data Bundle<br/>URL = ANC.DT.01, Subject = Patient, Encounter<br/>required data = Patient, Encounter, Observation (danger signs)
+SG->>SG: Evaluate WHO CQL logic (ANC.DT.01)
+SG-->>EHR: Return Recommendation<br/>WHO Smart CarePlan with generated actions
+EHR->>CL: Display recommendation in ANC Workflow
+CL->>EHR: Act on recommendation<br/>Continue ANC contact or referral
+end
+
+rect rgb(235, 245, 255)
+Note over CL, ITB: Phase 4: Conformance testing (Connectathon only)
+EHR->>ITB: Submit ANC.DT.01 test case (input data + CarePlan)
+ITB-->>EHR: Validation report
+end
+
+%% __p6__ __p7__ __p8__ __p9__ __p10__ __p11__
